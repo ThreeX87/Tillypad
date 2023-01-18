@@ -1,0 +1,63 @@
+Connection = (
+  HostName = 10.201.1.33
+  Port = 5255
+  UserName = 3
+  UserPassword = 3
+  License = 7CXEX-LYKHA-1MW54-2XH00-MFXX8-L9TTX --Лицензия S
+)
+-- Необязательные параметры >>>
+--MessagePermitTimeOut = 20
+--MessageForbidTimeOut = 5
+-- Необязательные параметры !!!
+
+-- Как минимум, должен быть поток Result с битовым полем CheckResult
+ProcessIdentifierStreams = 'Result;WorkParams'
+-- всегда "да"!
+ProcessIdentifierSQL = '
+--------------------------------------------------------------------------------------------------------------------------
+DECLARE @dev_ID          UNIQUEIDENTIFIER
+
+DECLARE @dvsn_ID         UNIQUEIDENTIFIER
+DECLARE @ident           NVARCHAR(MAX)
+DECLARE @identifier_Type UNIQUEIDENTIFIER
+DECLARE @mdoc_id         UNIQUEIDENTIFIER
+DECLARE @mdoc_Name       NVARCHAR(max)
+DECLARE @text            NVARCHAR(max)
+DECLARE @mdoc_Date       Date
+DECLARE @open            BIT
+DECLARE @dev_ID_msg      UNIQUEIDENTIFIER = '47AAC294-ED39-2949-AA20-9168E5AC1331' --Сообщение на 1 комп оператора
+DECLARE @dev_ID_mail     UNIQUEIDENTIFIER = '6064D5E0-72AE-4242-8D3D-6C492A64E721' --Отправка E-mail сообщения
+DECLARE @dev_ID_msg1     UNIQUEIDENTIFIER = 'BDC5D355-3EE5-D444-A341-B28926A36C5D' --Сообщение на 2 комп оператора
+DECLARE @store           nvarchar(max) = 'Готовая продукция'
+--------------------------------------------------------------------------------------------------------------------------
+
+SELECT @ident =  %idnt_Code , @identifier_Type = %identifier_Type, @dev_Id = %dev_Id, @dvsn_Id = %dvsn_Id
+
+--Разбивка штрих-кода и определение накладной--
+
+select @ident=STUFF(@ident, 9, 0, '-')
+select @ident=STUFF(@ident, 14, 0, '-')
+select @ident=STUFF(@ident, 19, 0, '-')
+select @ident=STUFF(@ident, 24, 0, '-')
+select @mdoc_id=mdoc_id, @mdoc_Name=mdoc_Name, @mdoc_Date=mdoc_Date from MoveDocuments where mdoc_id like @ident+'%'
+select @store=dvsn_name from Divisions where dvsn_id=@dvsn_id
+
+--Формирование текста сообщения--
+set @Text='ВНИМАНИЕ!'+char(10)+'Сотрудник цеха: '+@store+char(10)+'просит забрать часть заказа № ' + @mdoc_Name + ' от '+convert(nvarchar(max),convert(date,@mdoc_Date) )+'!'
+
+--Отправка сообщения--
+if @mdoc_id is not null
+begin
+  SET @open=1
+  exec msg_SendMessage @dev_ID_msg, 'MsgToExp', @Text, NULL, NULL
+  exec msg_SendMessage @dev_ID_msg1, 'MsgToExp', @Text, NULL, NULL
+  exec msg_SendMessage @dev_ID_mail, 'MsgToExp', @Text, NULL, NULL
+
+end
+else
+  set @open=0
+SELECT @open CheckResult
+
+'
+
+--Debug = (Messages = (Save = True; Show = True; Truncate = (Days = 30)))
